@@ -172,7 +172,10 @@ def simple_fea_solver(
     fixed_nodes: List[int],
     load_nodes: List[int],
     force: np.ndarray,
-    material: Material
+    material: Material,
+    hole_centers: List[Tuple[float, float]] = None,
+    fixed_hole_indices: List[int] = None,
+    load_hole_index: int = None
 ) -> FEAResult:
     """
     Simplified FEA solver with stress estimation.
@@ -195,14 +198,31 @@ def simple_fea_solver(
 
     # Calculate distances from load point
     load_center = np.mean(node_coords[load_nodes], axis=0) if len(load_nodes) > 0 else np.mean(node_coords, axis=0)
-    fixed_center = np.mean(node_coords[fixed_nodes], axis=0) if len(fixed_nodes) > 0 else node_coords[0]
+
+    # Get individual fixed hole centers for symmetric stress calculation
+    fixed_centers = []
+    if hole_centers and fixed_hole_indices:
+        for idx in fixed_hole_indices:
+            if idx < len(hole_centers):
+                hc = hole_centers[idx]
+                z_mid = (node_coords[:, 2].min() + node_coords[:, 2].max()) / 2
+                fixed_centers.append(np.array([hc[0], hc[1], z_mid]))
+
+    if not fixed_centers:
+        # Fallback to mean of fixed nodes
+        fixed_centers = [np.mean(node_coords[fixed_nodes], axis=0)] if len(fixed_nodes) > 0 else [node_coords[0]]
 
     # Distance from each node to load point
     dist_to_load = np.linalg.norm(node_coords - load_center, axis=1)
-    dist_to_fixed = np.linalg.norm(node_coords - fixed_center, axis=1)
 
-    # Span length (distance from fixed to load)
-    span = np.linalg.norm(load_center - fixed_center)
+    # Distance to nearest fixed point (for symmetric stress at both fixed holes)
+    dist_to_fixed = np.full(n_nodes, np.inf)
+    for fc in fixed_centers:
+        dist_i = np.linalg.norm(node_coords - fc, axis=1)
+        dist_to_fixed = np.minimum(dist_to_fixed, dist_i)
+
+    # Span length (average distance from fixed centers to load)
+    span = np.mean([np.linalg.norm(load_center - fc) for fc in fixed_centers])
 
     # Cross-sectional area estimate
     area = x_range * thickness * 0.7  # Account for holes
@@ -231,20 +251,25 @@ def simple_fea_solver(
         sigma_direct = F_mag / area
 
         # Stress concentration near holes (factor of 2-3 typical)
-        # Find if near a hole
+        # Use actual hole positions if provided
         hole_factor = 1.0
-        for hole_idx, hx, hy in [(0, 0, 23), (1, -40, -23), (2, 40, -23)]:
-            hole_dist = np.sqrt((node_coords[i, 0] - hx)**2 + (node_coords[i, 1] - hy)**2)
-            if hole_dist < 10:
-                hole_factor = max(hole_factor, 2.5 - hole_dist/10)
+        if hole_centers:
+            for hc in hole_centers:
+                hole_dist = np.sqrt((node_coords[i, 0] - hc[0])**2 + (node_coords[i, 1] - hc[1])**2)
+                if hole_dist < 10:
+                    hole_factor = max(hole_factor, 2.5 - hole_dist/10)
 
         # Combine stresses (simplified von Mises)
         base_stress = np.sqrt(sigma_bend**2 + 3*sigma_direct**2) * hole_factor
 
-        # Add variation based on position
-        position_factor = 0.5 + 0.5 * np.exp(-d_load / span)
+        # Stress increases near fixed boundaries (reaction forces)
+        # Use exponential decay from fixed points
+        fixed_stress_factor = 1.0 + 1.5 * np.exp(-d_fixed / 8)
 
-        stress[i] = base_stress * position_factor
+        # Stress also increases toward load application point
+        load_stress_factor = 1.0 + 0.5 * np.exp(-d_load / 10)
+
+        stress[i] = base_stress * fixed_stress_factor * load_stress_factor
 
     # Normalize to reasonable engineering values
     max_stress = np.max(stress)
@@ -574,7 +599,12 @@ def run_analysis(
 
     # Run solver
     print("   Solving...")
-    result = simple_fea_solver(node_coords, elements, fixed_nodes, load_nodes, force, material)
+    result = simple_fea_solver(
+        node_coords, elements, fixed_nodes, load_nodes, force, material,
+        hole_centers=hole_centers,
+        fixed_hole_indices=fix_holes,
+        load_hole_index=load_hole
+    )
 
     print(f"\n✅ Analysis Complete!")
     print(f"   Max von Mises Stress: {result.max_stress:.2f} MPa")

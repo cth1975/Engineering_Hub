@@ -147,7 +147,7 @@ VIEWER_HTML = '''<!DOCTYPE html>
     </div>
     <div id="controls">
         <button onclick="resetView()">Reset View</button>
-        <button onclick="toggleWireframe()">Wireframe</button>
+        <button onclick="toggleMesh()">Mesh</button>
         <button onclick="cycleColor()">Color</button>
     </div>
     <div id="stats">
@@ -281,7 +281,7 @@ VIEWER_HTML = '''<!DOCTYPE html>
             fitCameraToModel();
         }
 
-        function toggleWireframe() {
+        function toggleMesh() {
             if (!mesh) return;
             wireframe = !wireframe;
             mesh.material.wireframe = wireframe;
@@ -301,7 +301,7 @@ VIEWER_HTML = '''<!DOCTYPE html>
 
         function onKeyDown(event) {
             if (event.key === 'r' || event.key === 'R') resetView();
-            if (event.key === 'w' || event.key === 'W') toggleWireframe();
+            if (event.key === 'm' || event.key === 'M') toggleMesh();
             if (event.key === 'c' || event.key === 'C') cycleColor();
         }
 
@@ -475,7 +475,7 @@ FEA_VIEWER_HTML = '''<!DOCTYPE html>
     </div>
     <div id="controls">
         <button onclick="resetView()">Reset View</button>
-        <button onclick="toggleWireframe()">Wireframe</button>
+        <button onclick="toggleMesh()">Mesh</button>
         <button id="bc-btn" class="bc-btn" onclick="toggleBC()">Show BC</button>
         <button id="load-btn" class="load-btn" onclick="toggleLoads()">Show Loads</button>
     </div>
@@ -755,7 +755,7 @@ FEA_VIEWER_HTML = '''<!DOCTYPE html>
 
         function resetView() { fitCamera(); }
 
-        function toggleWireframe() {
+        function toggleMesh() {
             if (!mesh) return;
             wireframe = !wireframe;
             mesh.material.wireframe = wireframe;
@@ -769,7 +769,7 @@ FEA_VIEWER_HTML = '''<!DOCTYPE html>
 
         function onKeyDown(e) {
             if (e.key === 'r' || e.key === 'R') resetView();
-            if (e.key === 'w' || e.key === 'W') toggleWireframe();
+            if (e.key === 'm' || e.key === 'M') toggleMesh();
             if (e.key === 'b' || e.key === 'B') toggleBC();
             if (e.key === 'l' || e.key === 'L') toggleLoads();
         }
@@ -948,7 +948,7 @@ Controls (Web Viewer):
   Right mouse drag   Pan view
   Scroll wheel       Zoom in/out
   R                  Reset view
-  W                  Toggle wireframe
+  M                  Toggle mesh view
   C                  Cycle colors
 
 Examples:

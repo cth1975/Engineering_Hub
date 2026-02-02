@@ -1,8 +1,12 @@
 # Engineering Hub
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 An AI-agentic engineering environment for the complete product lifecycle: **CAD → Analysis → Manufacturing**.
 
 Built entirely on open-source tools, designed from the ground up for AI agent automation.
+
+**Open Source:** This project is released under the MIT License. You're free to use, modify, and distribute this code for any purpose.
 
 ## Vision
 

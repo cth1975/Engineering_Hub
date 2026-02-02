@@ -230,4 +230,23 @@ python3 src/tools/fea_solver.py output/triangle_bracket.stl \
 
 ---
 
+### 2026-02-01 - BC/Load Visualization & Open Source
+
+- **Boundary Condition Visualization**:
+  - Toggle buttons for showing/hiding fixed constraints (green markers)
+  - Toggle buttons for showing/hiding load arrows (orange arrows)
+  - Legend appears when BC or loads are visible
+  - Keyboard shortcuts: B = toggle BC, L = toggle Loads, M = toggle Mesh
+
+- **Symmetric Stress Fix**:
+  - Fixed stress calculation to use actual hole positions
+  - Stress now correctly concentrated at BOTH fixed boundaries
+  - Distance-based stress decay from each fixed hole individually
+
+- **Open Source License**:
+  - Added MIT License for permissive open source use
+  - Anyone can use, modify, distribute the code freely
+
+---
+
 *This file is automatically maintained. See CLAUDE.md for update instructions.*
