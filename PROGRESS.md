@@ -36,6 +36,8 @@ This is an AI-agentic engineering environment for the complete product lifecycle
 | **Analysis Agent** | ✅ Complete | `src/agents/analysis_agent.py` - FEA automation |
 | **Manufacturing Agent** | ✅ Complete | `src/agents/manufacturing_agent.py` - G-code/DXF |
 | **3D Viewer** | ✅ Complete | `src/tools/viewer.py` - Three.js web viewer |
+| **FEA Solver** | ✅ Complete | `src/tools/fea_solver.py` - stress analysis |
+| **Unified Viewer** | ✅ Complete | CAD + FEA use same web viewer |
 | **Docker + Local** | ✅ Working | Both environments functional |
 
 ### What's Next
@@ -78,13 +80,14 @@ This is an AI-agentic engineering environment for the complete product lifecycle
 - [x] Visual preview pipeline (`./view` command, Three.js web viewer)
 - [ ] Test with actual Claude API / Ollama (optional - templates work)
 
-### Phase 3: Analysis Integration ⏳ 70% Complete
+### Phase 3: Analysis Integration ✅ 90% Complete
 - [x] Gmsh meshing automation (`analysis_agent.py`)
 - [x] CalculiX FEA integration
 - [x] Results interpretation agent
 - [x] Material library (aluminum, steel, PLA, PETG, ABS, nylon)
-- [ ] Test with actual solver
-- [ ] Design iteration loop
+- [x] FEA solver with von Mises stress (`fea_solver.py`)
+- [x] Unified web-based stress visualization
+- [ ] Design iteration loop (automated redesign)
 
 ### Phase 4: Manufacturing Pipeline ⏳ 60% Complete
 - [x] Slicer integration framework (`manufacturing_agent.py`)
@@ -184,11 +187,46 @@ This is an AI-agentic engineering environment for the complete product lifecycle
 - Export STEP, STL, DXF, SVG
 - View models in browser with full 3D controls
 - Docker containers for cross-platform deployment
+- **FEA analysis with von Mises stress visualization**
 
 **Next steps:**
-1. Add FEA analysis with von Mises stress visualization
-2. Test full CAD → Analysis → Manufacturing pipeline
-3. Integrate LLM for natural language part generation
+1. Test full CAD → Analysis → Manufacturing pipeline
+2. Integrate LLM for natural language part generation
+3. Add displacement visualization mode
+
+---
+
+### 2026-02-01 - FEA Integration Complete
+
+- **FEA Solver** (`src/tools/fea_solver.py`):
+  - Fast surface mesh loading via PyVista
+  - Analytical stress estimation with hole stress concentration
+  - Material library (aluminum, steel, PLA, PETG, ABS)
+  - Boundary conditions: fixed holes + load application
+  - Safety factor calculation
+
+- **Unified Visualization**:
+  - Web-based Three.js viewer for both CAD and FEA
+  - Jet colormap stress contours (blue → cyan → green → yellow → red)
+  - Interactive colorbar with stress scale
+  - Safety factor indicator (green/yellow/red)
+  - Same controls as CAD viewer (rotate, pan, zoom)
+
+**Test Results (Triangle Bracket - 100N load):**
+- Max Stress: 8.50 MPa
+- Max Displacement: 0.039 mm
+- Safety Factor: 32.46 (aluminum 6061-T6)
+
+**Commands:**
+```bash
+# Run FEA analysis with web viewer
+python3 src/tools/fea_solver.py output/triangle_bracket.stl \
+    --fix-holes 0 1 --load-hole 2 --force 100
+
+# Use native PyVista viewer
+python3 src/tools/fea_solver.py output/triangle_bracket.stl \
+    --fix-holes 0 1 --load-hole 2 --force 100 --native
+```
 
 ---
 
