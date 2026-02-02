@@ -301,23 +301,54 @@ def visualize_stress(result: FEAResult, stl_path: Path, title: str = "Von Mises 
         visualize_stress_pyvista(result, title)
 
 
+def find_nearest_numpy(query_points: np.ndarray, reference_points: np.ndarray) -> np.ndarray:
+    """
+    Find nearest reference point for each query point using pure numpy.
+    Returns indices into reference_points.
+    """
+    indices = np.zeros(len(query_points), dtype=int)
+
+    for i, q in enumerate(query_points):
+        # Calculate distances to all reference points
+        distances = np.sum((reference_points - q) ** 2, axis=1)
+        indices[i] = np.argmin(distances)
+
+    return indices
+
+
 def visualize_stress_web(result: FEAResult, stl_path: Path, title: str = "Von Mises Stress"):
     """
     Visualize von Mises stress using web-based Three.js viewer.
     Same unified viewer as CAD models.
     """
+    import pyvista as pv
+
+    # Load the STL to get vertex positions
+    mesh = pv.read(str(stl_path))
+    stl_vertices = np.array(mesh.points)
+
+    # Map stress from FEA nodes to STL vertices using nearest neighbor
+    # Use pure numpy implementation to avoid scipy compatibility issues
+    indices = find_nearest_numpy(stl_vertices, result.node_coords)
+
+    # Map stress values
+    stress_per_stl_vertex = result.stress_field[indices]
+
     # Import the viewer module
     import sys
     sys.path.insert(0, str(Path(__file__).parent))
     from viewer import view_fea_web
 
-    # Convert stress field to list
-    stress_list = result.stress_field.tolist()
+    # Convert to lists for JSON
+    stress_list = stress_per_stl_vertex.tolist()
+    # Flatten vertex positions [x1,y1,z1,x2,y2,z2,...]
+    vertex_positions = stl_vertices.flatten().tolist()
 
     # Open web viewer
     view_fea_web(
         stl_path,
         stress_list,
+        vertex_positions,
         result.max_stress,
         result.max_displacement,
         result.safety_factor

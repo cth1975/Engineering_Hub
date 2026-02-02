@@ -459,6 +459,7 @@ FEA_VIEWER_HTML = '''<!DOCTYPE html>
     <script>
         const MODEL_URL = '__MODEL_URL__';
         const STRESS_DATA = __STRESS_DATA__;
+        const VERTEX_POSITIONS = __VERTEX_POSITIONS__;
         const MAX_STRESS = __MAX_STRESS_RAW__;
 
         let scene, camera, renderer, controls, mesh;
@@ -524,27 +525,52 @@ FEA_VIEWER_HTML = '''<!DOCTYPE html>
             animate();
         }
 
+        // Find nearest vertex in reference positions
+        function findNearestStress(x, y, z) {
+            let minDist = Infinity;
+            let bestIdx = 0;
+
+            for (let i = 0; i < VERTEX_POSITIONS.length; i += 3) {
+                const dx = x - VERTEX_POSITIONS[i];
+                const dy = y - VERTEX_POSITIONS[i + 1];
+                const dz = z - VERTEX_POSITIONS[i + 2];
+                const dist = dx*dx + dy*dy + dz*dz;
+
+                if (dist < minDist) {
+                    minDist = dist;
+                    bestIdx = Math.floor(i / 3);
+                }
+            }
+            return STRESS_DATA[bestIdx] || 0;
+        }
+
         function loadModel() {
             const loader = new THREE.STLLoader();
             loader.load(MODEL_URL, function(geometry) {
                 geometry.computeBoundingBox();
                 const center = new THREE.Vector3();
                 geometry.boundingBox.getCenter(center);
-                geometry.translate(-center.x, -center.y, -center.z);
 
-                // Apply stress colors to vertices
+                // Apply stress colors to vertices by matching positions
                 const positions = geometry.attributes.position;
                 const colors = new Float32Array(positions.count * 3);
 
                 for (let i = 0; i < positions.count; i++) {
-                    const stressIdx = i % STRESS_DATA.length;
-                    const normalizedStress = STRESS_DATA[stressIdx] / MAX_STRESS;
+                    const x = positions.getX(i);
+                    const y = positions.getY(i);
+                    const z = positions.getZ(i);
+
+                    const stressValue = findNearestStress(x, y, z);
+                    const normalizedStress = stressValue / MAX_STRESS;
                     const color = jetColor(Math.min(1, Math.max(0, normalizedStress)));
+
                     colors[i * 3] = color.r;
                     colors[i * 3 + 1] = color.g;
                     colors[i * 3 + 2] = color.b;
                 }
 
+                // Center the geometry after computing colors
+                geometry.translate(-center.x, -center.y, -center.z);
                 geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
                 const material = new THREE.MeshPhongMaterial({
@@ -618,8 +644,8 @@ def create_viewer_html(stl_path: Path, output_dir: Path = None) -> Path:
     return html_path
 
 
-def create_fea_viewer_html(stl_path: Path, stress_data: list, max_stress: float,
-                           max_displacement: float, safety_factor: float,
+def create_fea_viewer_html(stl_path: Path, stress_data: list, vertex_positions: list,
+                           max_stress: float, max_displacement: float, safety_factor: float,
                            output_dir: Path = None) -> Path:
     """Create HTML viewer file with FEA stress coloring."""
     if output_dir is None:
@@ -646,16 +672,17 @@ def create_fea_viewer_html(stl_path: Path, stress_data: list, max_stress: float,
     html_content = html_content.replace('__SAFETY_FACTOR__', f"{safety_factor:.2f}")
     html_content = html_content.replace('__SAFETY_CLASS__', safety_class)
     html_content = html_content.replace('__STRESS_DATA__', json.dumps(stress_data))
+    html_content = html_content.replace('__VERTEX_POSITIONS__', json.dumps(vertex_positions))
 
     html_path.write_text(html_content)
     return html_path
 
 
-def view_fea_web(stl_path: Path, stress_data: list, max_stress: float,
-                 max_displacement: float, safety_factor: float):
+def view_fea_web(stl_path: Path, stress_data: list, vertex_positions: list,
+                 max_stress: float, max_displacement: float, safety_factor: float):
     """View FEA results in web browser with stress coloring."""
     html_path = create_fea_viewer_html(
-        stl_path, stress_data, max_stress, max_displacement, safety_factor
+        stl_path, stress_data, vertex_positions, max_stress, max_displacement, safety_factor
     )
     print(f"Created FEA viewer: {html_path.name}")
     serve_and_open(stl_path.parent, html_path.name)
