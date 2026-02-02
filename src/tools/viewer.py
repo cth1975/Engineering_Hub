@@ -416,6 +416,27 @@ FEA_VIEWER_HTML = '''<!DOCTYPE html>
             font-weight: 500;
         }
         #controls button:hover { background: #ff8a8a; }
+        #controls button.active { background: #4fc3f7; }
+        #controls button.bc-btn { background: #81c784; }
+        #controls button.bc-btn:hover { background: #a5d6a7; }
+        #controls button.bc-btn.active { background: #66bb6a; }
+        #controls button.load-btn { background: #ffb74d; }
+        #controls button.load-btn:hover { background: #ffd54f; }
+        #controls button.load-btn.active { background: #ffa726; }
+        #bc-legend {
+            position: absolute;
+            bottom: 60px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 100;
+        }
+        #bc-legend .legend-item { display: flex; align-items: center; margin: 5px 0; }
+        #bc-legend .legend-color { width: 20px; height: 20px; margin-right: 10px; border-radius: 3px; }
+        #bc-legend .fixed { background: #81c784; }
+        #bc-legend .load { background: #ffb74d; }
         #loading {
             position: absolute;
             top: 50%;
@@ -438,6 +459,8 @@ FEA_VIEWER_HTML = '''<!DOCTYPE html>
         <p><span class="key">Left drag</span> Rotate</p>
         <p><span class="key">Scroll</span> Zoom</p>
         <p><span class="key">R</span> Reset view</p>
+        <p><span class="key">B</span> Toggle BC</p>
+        <p><span class="key">L</span> Toggle Loads</p>
     </div>
     <div id="colorbar-title">Von Mises<br>Stress (MPa)</div>
     <div id="colorbar"></div>
@@ -446,9 +469,15 @@ FEA_VIEWER_HTML = '''<!DOCTYPE html>
         <span id="mid-label">__MID_STRESS__</span>
         <span id="min-label">0.00</span>
     </div>
+    <div id="bc-legend" style="display: none;">
+        <div class="legend-item"><div class="legend-color fixed"></div> Fixed Constraint</div>
+        <div class="legend-item"><div class="legend-color load"></div> Applied Load</div>
+    </div>
     <div id="controls">
         <button onclick="resetView()">Reset View</button>
         <button onclick="toggleWireframe()">Wireframe</button>
+        <button id="bc-btn" class="bc-btn" onclick="toggleBC()">Show BC</button>
+        <button id="load-btn" class="load-btn" onclick="toggleLoads()">Show Loads</button>
     </div>
     <div id="loading">Loading FEA results...</div>
 
@@ -461,9 +490,16 @@ FEA_VIEWER_HTML = '''<!DOCTYPE html>
         const STRESS_DATA = __STRESS_DATA__;
         const VERTEX_POSITIONS = __VERTEX_POSITIONS__;
         const MAX_STRESS = __MAX_STRESS_RAW__;
+        const FIXED_POSITIONS = __FIXED_POSITIONS__;  // [[x,y,z], ...]
+        const LOAD_POSITION = __LOAD_POSITION__;      // [x, y, z]
+        const LOAD_DIRECTION = __LOAD_DIRECTION__;    // [dx, dy, dz] normalized
+        const FORCE_MAGNITUDE = __FORCE_MAGNITUDE__;  // N
 
         let scene, camera, renderer, controls, mesh;
         let wireframe = false;
+        let bcGroup, loadGroup;
+        let bcVisible = false, loadVisible = false;
+        let modelCenter = new THREE.Vector3();
 
         // Jet colormap (blue -> cyan -> green -> yellow -> red)
         function jetColor(value) {
@@ -582,9 +618,129 @@ FEA_VIEWER_HTML = '''<!DOCTYPE html>
                 mesh = new THREE.Mesh(geometry, material);
                 scene.add(mesh);
 
+                // Store center for BC/Load positioning
+                modelCenter.copy(center);
+
+                // Create boundary condition markers
+                createBCMarkers();
+                createLoadArrow();
+
                 fitCamera();
                 document.getElementById('loading').style.display = 'none';
             });
+        }
+
+        function createBCMarkers() {
+            bcGroup = new THREE.Group();
+            bcGroup.visible = false;
+
+            // Create fixed constraint markers (triangular ground symbols)
+            FIXED_POSITIONS.forEach(pos => {
+                const [x, y, z] = pos;
+                // Offset by model center
+                const px = x - modelCenter.x;
+                const py = y - modelCenter.y;
+                const pz = z - modelCenter.z;
+
+                // Create a small ground/fixed symbol (triangle pointing down)
+                const size = 5;
+
+                // Triangle shape
+                const triGeo = new THREE.BufferGeometry();
+                const vertices = new Float32Array([
+                    0, 0, 0,
+                    -size/2, -size, 0,
+                    size/2, -size, 0
+                ]);
+                triGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+                const triMat = new THREE.MeshBasicMaterial({ color: 0x81c784, side: THREE.DoubleSide });
+                const tri = new THREE.Mesh(triGeo, triMat);
+                tri.position.set(px, py, pz);
+                tri.lookAt(px, py - 1, pz);
+                bcGroup.add(tri);
+
+                // Add ground lines below triangle
+                const lineMat = new THREE.LineBasicMaterial({ color: 0x81c784, linewidth: 2 });
+                for (let i = -2; i <= 2; i++) {
+                    const lineGeo = new THREE.BufferGeometry();
+                    const lineVerts = new Float32Array([
+                        px + i*2 - 1, py - size - 2, pz,
+                        px + i*2 + 1, py - size - 4, pz
+                    ]);
+                    lineGeo.setAttribute('position', new THREE.BufferAttribute(lineVerts, 3));
+                    const line = new THREE.Line(lineGeo, lineMat);
+                    bcGroup.add(line);
+                }
+
+                // Add sphere at constraint point
+                const sphereGeo = new THREE.SphereGeometry(2, 16, 16);
+                const sphereMat = new THREE.MeshBasicMaterial({ color: 0x81c784 });
+                const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+                sphere.position.set(px, py, pz);
+                bcGroup.add(sphere);
+            });
+
+            scene.add(bcGroup);
+        }
+
+        function createLoadArrow() {
+            loadGroup = new THREE.Group();
+            loadGroup.visible = false;
+
+            if (LOAD_POSITION.length === 3) {
+                const [x, y, z] = LOAD_POSITION;
+                const [dx, dy, dz] = LOAD_DIRECTION;
+
+                // Offset by model center
+                const px = x - modelCenter.x;
+                const py = y - modelCenter.y;
+                const pz = z - modelCenter.z;
+
+                // Arrow length proportional to force (scaled for visibility)
+                const arrowLength = Math.min(30, Math.max(15, FORCE_MAGNITUDE / 5));
+
+                // Create arrow
+                const arrowDir = new THREE.Vector3(dx, dy, dz).normalize();
+                const arrowOrigin = new THREE.Vector3(px - dx * arrowLength, py - dy * arrowLength, pz - dz * arrowLength);
+
+                const arrowHelper = new THREE.ArrowHelper(
+                    arrowDir,
+                    arrowOrigin,
+                    arrowLength,
+                    0xffb74d,  // Orange color
+                    arrowLength * 0.3,  // Head length
+                    arrowLength * 0.15   // Head width
+                );
+                loadGroup.add(arrowHelper);
+
+                // Add force label
+                // (Text rendering in Three.js is complex, so we'll add a sphere at the arrow origin)
+                const sphereGeo = new THREE.SphereGeometry(2, 16, 16);
+                const sphereMat = new THREE.MeshBasicMaterial({ color: 0xffb74d });
+                const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+                sphere.position.copy(arrowOrigin);
+                loadGroup.add(sphere);
+            }
+
+            scene.add(loadGroup);
+        }
+
+        function toggleBC() {
+            bcVisible = !bcVisible;
+            if (bcGroup) bcGroup.visible = bcVisible;
+            const btn = document.getElementById('bc-btn');
+            btn.textContent = bcVisible ? 'Hide BC' : 'Show BC';
+            btn.classList.toggle('active', bcVisible);
+            document.getElementById('bc-legend').style.display = (bcVisible || loadVisible) ? 'block' : 'none';
+        }
+
+        function toggleLoads() {
+            loadVisible = !loadVisible;
+            if (loadGroup) loadGroup.visible = loadVisible;
+            const btn = document.getElementById('load-btn');
+            btn.textContent = loadVisible ? 'Hide Loads' : 'Show Loads';
+            btn.classList.toggle('active', loadVisible);
+            document.getElementById('bc-legend').style.display = (bcVisible || loadVisible) ? 'block' : 'none';
         }
 
         function fitCamera() {
@@ -614,6 +770,8 @@ FEA_VIEWER_HTML = '''<!DOCTYPE html>
         function onKeyDown(e) {
             if (e.key === 'r' || e.key === 'R') resetView();
             if (e.key === 'w' || e.key === 'W') toggleWireframe();
+            if (e.key === 'b' || e.key === 'B') toggleBC();
+            if (e.key === 'l' || e.key === 'L') toggleLoads();
         }
 
         function animate() {
@@ -646,6 +804,8 @@ def create_viewer_html(stl_path: Path, output_dir: Path = None) -> Path:
 
 def create_fea_viewer_html(stl_path: Path, stress_data: list, vertex_positions: list,
                            max_stress: float, max_displacement: float, safety_factor: float,
+                           fixed_positions: list = None, load_position: list = None,
+                           load_direction: list = None, force_magnitude: float = 100,
                            output_dir: Path = None) -> Path:
     """Create HTML viewer file with FEA stress coloring."""
     if output_dir is None:
@@ -661,6 +821,14 @@ def create_fea_viewer_html(stl_path: Path, stress_data: list, vertex_positions: 
     else:
         safety_class = "danger"
 
+    # Default boundary condition data
+    if fixed_positions is None:
+        fixed_positions = []
+    if load_position is None:
+        load_position = []
+    if load_direction is None:
+        load_direction = [0, 0, -1]  # Default: downward
+
     # Create HTML with FEA data
     html_content = FEA_VIEWER_HTML
     html_content = html_content.replace('__MODEL_URL__', stl_path.name)
@@ -673,16 +841,23 @@ def create_fea_viewer_html(stl_path: Path, stress_data: list, vertex_positions: 
     html_content = html_content.replace('__SAFETY_CLASS__', safety_class)
     html_content = html_content.replace('__STRESS_DATA__', json.dumps(stress_data))
     html_content = html_content.replace('__VERTEX_POSITIONS__', json.dumps(vertex_positions))
+    html_content = html_content.replace('__FIXED_POSITIONS__', json.dumps(fixed_positions))
+    html_content = html_content.replace('__LOAD_POSITION__', json.dumps(load_position))
+    html_content = html_content.replace('__LOAD_DIRECTION__', json.dumps(load_direction))
+    html_content = html_content.replace('__FORCE_MAGNITUDE__', str(force_magnitude))
 
     html_path.write_text(html_content)
     return html_path
 
 
 def view_fea_web(stl_path: Path, stress_data: list, vertex_positions: list,
-                 max_stress: float, max_displacement: float, safety_factor: float):
+                 max_stress: float, max_displacement: float, safety_factor: float,
+                 fixed_positions: list = None, load_position: list = None,
+                 load_direction: list = None, force_magnitude: float = 100):
     """View FEA results in web browser with stress coloring."""
     html_path = create_fea_viewer_html(
-        stl_path, stress_data, vertex_positions, max_stress, max_displacement, safety_factor
+        stl_path, stress_data, vertex_positions, max_stress, max_displacement, safety_factor,
+        fixed_positions, load_position, load_direction, force_magnitude
     )
     print(f"Created FEA viewer: {html_path.name}")
     serve_and_open(stl_path.parent, html_path.name)

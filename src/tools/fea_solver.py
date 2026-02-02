@@ -285,7 +285,9 @@ def simple_fea_solver(
     )
 
 
-def visualize_stress(result: FEAResult, stl_path: Path, title: str = "Von Mises Stress", use_web: bool = True):
+def visualize_stress(result: FEAResult, stl_path: Path, title: str = "Von Mises Stress", use_web: bool = True,
+                     fixed_hole_centers: list = None, load_hole_center: list = None,
+                     force_direction: list = None, force_magnitude: float = 100):
     """
     Visualize von Mises stress.
 
@@ -294,9 +296,14 @@ def visualize_stress(result: FEAResult, stl_path: Path, title: str = "Von Mises 
         stl_path: Path to STL file for visualization
         title: Window title
         use_web: If True, use web-based viewer (default). If False, use PyVista.
+        fixed_hole_centers: List of (x, y) tuples for fixed hole positions
+        load_hole_center: (x, y) tuple for load hole position
+        force_direction: [dx, dy, dz] force direction vector
+        force_magnitude: Force magnitude in N
     """
     if use_web:
-        visualize_stress_web(result, stl_path, title)
+        visualize_stress_web(result, stl_path, title, fixed_hole_centers, load_hole_center,
+                            force_direction, force_magnitude)
     else:
         visualize_stress_pyvista(result, title)
 
@@ -316,7 +323,9 @@ def find_nearest_numpy(query_points: np.ndarray, reference_points: np.ndarray) -
     return indices
 
 
-def visualize_stress_web(result: FEAResult, stl_path: Path, title: str = "Von Mises Stress"):
+def visualize_stress_web(result: FEAResult, stl_path: Path, title: str = "Von Mises Stress",
+                         fixed_hole_centers: list = None, load_hole_center: list = None,
+                         force_direction: list = None, force_magnitude: float = 100):
     """
     Visualize von Mises stress using web-based Three.js viewer.
     Same unified viewer as CAD models.
@@ -344,6 +353,21 @@ def visualize_stress_web(result: FEAResult, stl_path: Path, title: str = "Von Mi
     # Flatten vertex positions [x1,y1,z1,x2,y2,z2,...]
     vertex_positions = stl_vertices.flatten().tolist()
 
+    # Prepare boundary condition data (convert to native Python types for JSON)
+    fixed_positions = []
+    if fixed_hole_centers:
+        # Add Z coordinate (middle of thickness) for each fixed hole center
+        z_mid = float((result.node_coords[:, 2].min() + result.node_coords[:, 2].max()) / 2)
+        for hc in fixed_hole_centers:
+            fixed_positions.append([float(hc[0]), float(hc[1]), z_mid])
+
+    load_position = []
+    if load_hole_center:
+        z_mid = float((result.node_coords[:, 2].min() + result.node_coords[:, 2].max()) / 2)
+        load_position = [float(load_hole_center[0]), float(load_hole_center[1]), z_mid]
+
+    load_dir = [float(x) for x in force_direction] if force_direction else [0, 0, -1]
+
     # Open web viewer
     view_fea_web(
         stl_path,
@@ -351,7 +375,11 @@ def visualize_stress_web(result: FEAResult, stl_path: Path, title: str = "Von Mi
         vertex_positions,
         result.max_stress,
         result.max_displacement,
-        result.safety_factor
+        result.safety_factor,
+        fixed_positions,
+        load_position,
+        load_dir,
+        force_magnitude
     )
 
 
@@ -561,8 +589,18 @@ def run_analysis(
     # Visualize
     if visualize:
         print("\n   Opening stress visualization...")
+
+        # Get boundary condition positions for visualization
+        fixed_hole_centers = [hole_centers[i] for i in fix_holes if i < len(hole_centers)]
+        load_hole_center = hole_centers[load_hole] if load_hole < len(hole_centers) else None
+        force_direction = [0, 0, -1]  # Downward
+
         visualize_stress(result, model_path, f"Von Mises Stress - {model_path.stem}",
-                        use_web=not use_native_viewer)
+                        use_web=not use_native_viewer,
+                        fixed_hole_centers=fixed_hole_centers,
+                        load_hole_center=load_hole_center,
+                        force_direction=force_direction,
+                        force_magnitude=force_magnitude)
 
     return result
 
