@@ -456,11 +456,13 @@ FEA_VIEWER_HTML = '''<!DOCTYPE html>
         <p>Max Disp: <span class="value" id="max-disp">__MAX_DISP__</span> mm</p>
         <p>Safety Factor: <span class="value __SAFETY_CLASS__" id="safety">__SAFETY_FACTOR__</span></p>
         <hr style="margin: 10px 0; border-color: #444;">
-        <p><span class="key">Left drag</span> Rotate</p>
-        <p><span class="key">Scroll</span> Zoom</p>
-        <p><span class="key">R</span> Reset view</p>
-        <p><span class="key">B</span> Toggle BC</p>
-        <p><span class="key">L</span> Toggle Loads</p>
+        <p style="font-size: 12px; color: #888;">Mesh Quality</p>
+        <p>Elements: <span class="value">__MESH_ELEMENTS__</span></p>
+        <p>Avg Aspect: <span class="value">__MESH_ASPECT__</span></p>
+        <p>Quality: <span class="value __MESH_QUALITY_CLASS__">__MESH_QUALITY__</span></p>
+        <hr style="margin: 10px 0; border-color: #444;">
+        <p><span class="key">R</span> Reset <span class="key">M</span> Mesh</p>
+        <p><span class="key">B</span> BC <span class="key">L</span> Loads</p>
     </div>
     <div id="colorbar-title">Von Mises<br>Stress (MPa)</div>
     <div id="colorbar"></div>
@@ -806,6 +808,7 @@ def create_fea_viewer_html(stl_path: Path, stress_data: list, vertex_positions: 
                            max_stress: float, max_displacement: float, safety_factor: float,
                            fixed_positions: list = None, load_position: list = None,
                            load_direction: list = None, force_magnitude: float = 100,
+                           mesh_elements: int = 0, mesh_aspect: float = 1.0, mesh_quality: float = 1.0,
                            output_dir: Path = None) -> Path:
     """Create HTML viewer file with FEA stress coloring."""
     if output_dir is None:
@@ -846,6 +849,20 @@ def create_fea_viewer_html(stl_path: Path, stress_data: list, vertex_positions: 
     html_content = html_content.replace('__LOAD_DIRECTION__', json.dumps(load_direction))
     html_content = html_content.replace('__FORCE_MAGNITUDE__', str(force_magnitude))
 
+    # Mesh quality info
+    html_content = html_content.replace('__MESH_ELEMENTS__', str(mesh_elements))
+    html_content = html_content.replace('__MESH_ASPECT__', f"{mesh_aspect:.2f}")
+    html_content = html_content.replace('__MESH_QUALITY__', f"{mesh_quality:.0%}")
+
+    # Quality class for coloring
+    if mesh_quality >= 0.7:
+        mesh_quality_class = "safe"
+    elif mesh_quality >= 0.5:
+        mesh_quality_class = "warning"
+    else:
+        mesh_quality_class = "danger"
+    html_content = html_content.replace('__MESH_QUALITY_CLASS__', mesh_quality_class)
+
     html_path.write_text(html_content)
     return html_path
 
@@ -853,11 +870,13 @@ def create_fea_viewer_html(stl_path: Path, stress_data: list, vertex_positions: 
 def view_fea_web(stl_path: Path, stress_data: list, vertex_positions: list,
                  max_stress: float, max_displacement: float, safety_factor: float,
                  fixed_positions: list = None, load_position: list = None,
-                 load_direction: list = None, force_magnitude: float = 100):
+                 load_direction: list = None, force_magnitude: float = 100,
+                 mesh_elements: int = 0, mesh_aspect: float = 1.0, mesh_quality: float = 1.0):
     """View FEA results in web browser with stress coloring."""
     html_path = create_fea_viewer_html(
         stl_path, stress_data, vertex_positions, max_stress, max_displacement, safety_factor,
-        fixed_positions, load_position, load_direction, force_magnitude
+        fixed_positions, load_position, load_direction, force_magnitude,
+        mesh_elements, mesh_aspect, mesh_quality
     )
     print(f"Created FEA viewer: {html_path.name}")
     serve_and_open(stl_path.parent, html_path.name)

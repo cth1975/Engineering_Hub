@@ -62,6 +62,125 @@ class FEAResult:
     error: Optional[str] = None
 
 
+@dataclass
+class MeshQuality:
+    """Mesh quality statistics"""
+    n_nodes: int
+    n_elements: int
+    min_aspect_ratio: float
+    max_aspect_ratio: float
+    avg_aspect_ratio: float
+    min_angle: float
+    max_angle: float
+    avg_angle: float
+    quality_score: float  # 0-1, higher is better
+
+
+def calculate_mesh_quality(node_coords: np.ndarray, elements: np.ndarray) -> MeshQuality:
+    """
+    Calculate mesh quality metrics for triangle elements.
+
+    Returns:
+        MeshQuality with aspect ratio, angles, and overall quality score
+    """
+    aspect_ratios = []
+    min_angles = []
+    max_angles = []
+
+    for elem in elements:
+        if len(elem) < 3:
+            continue
+
+        # Get triangle vertices
+        p0, p1, p2 = node_coords[elem[0]], node_coords[elem[1]], node_coords[elem[2]]
+
+        # Calculate edge lengths
+        e0 = np.linalg.norm(p1 - p0)
+        e1 = np.linalg.norm(p2 - p1)
+        e2 = np.linalg.norm(p0 - p2)
+
+        edges = sorted([e0, e1, e2])
+        if edges[0] > 1e-10:
+            aspect_ratios.append(edges[2] / edges[0])
+
+        # Calculate angles using law of cosines
+        def angle_at_vertex(a, b, c):
+            # Angle at vertex where edges of length a and b meet, opposite to edge c
+            cos_angle = (a*a + b*b - c*c) / (2*a*b + 1e-10)
+            cos_angle = np.clip(cos_angle, -1, 1)
+            return np.degrees(np.arccos(cos_angle))
+
+        if e0 > 1e-10 and e1 > 1e-10 and e2 > 1e-10:
+            a0 = angle_at_vertex(e0, e2, e1)
+            a1 = angle_at_vertex(e0, e1, e2)
+            a2 = angle_at_vertex(e1, e2, e0)
+            angles = [a0, a1, a2]
+            min_angles.append(min(angles))
+            max_angles.append(max(angles))
+
+    if not aspect_ratios:
+        return MeshQuality(len(node_coords), len(elements), 1, 1, 1, 60, 60, 60, 1.0)
+
+    # Calculate quality score (0-1)
+    # Good mesh: aspect ratio < 3, min angle > 20°, max angle < 120°
+    avg_ar = np.mean(aspect_ratios)
+    avg_min_angle = np.mean(min_angles) if min_angles else 60
+    avg_max_angle = np.mean(max_angles) if max_angles else 60
+
+    ar_score = max(0, 1 - (avg_ar - 1) / 4)  # 1.0 for AR=1, 0 for AR=5
+    angle_score = min(avg_min_angle / 30, 1.0)  # 1.0 for min_angle >= 30°
+    max_angle_score = max(0, 1 - (avg_max_angle - 60) / 60)  # 1.0 for 60°, 0 for 120°
+
+    quality_score = (ar_score + angle_score + max_angle_score) / 3
+
+    return MeshQuality(
+        n_nodes=len(node_coords),
+        n_elements=len(elements),
+        min_aspect_ratio=min(aspect_ratios),
+        max_aspect_ratio=max(aspect_ratios),
+        avg_aspect_ratio=avg_ar,
+        min_angle=min(min_angles) if min_angles else 60,
+        max_angle=max(max_angles) if max_angles else 60,
+        avg_angle=avg_min_angle,
+        quality_score=quality_score
+    )
+
+
+def clean_mesh_pyvista(stl_path: Path, target_reduction: float = 0.0) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Clean and optionally decimate STL mesh using PyVista.
+
+    Args:
+        stl_path: Path to STL file
+        target_reduction: Fraction of triangles to remove (0-1), 0 = no reduction
+
+    Returns:
+        Tuple of (node_coords, elements) with cleaned mesh
+    """
+    import pyvista as pv
+
+    # Load mesh
+    mesh = pv.read(str(stl_path))
+
+    # Clean the mesh (merge duplicate points, remove degenerate cells)
+    mesh = mesh.clean(tolerance=1e-6)
+
+    # Compute normals for better visualization
+    mesh = mesh.compute_normals(auto_orient_normals=True)
+
+    # Optional decimation for very dense meshes
+    if target_reduction > 0 and mesh.n_cells > 1000:
+        mesh = mesh.decimate(target_reduction)
+
+    # Extract points and faces
+    node_coords = np.array(mesh.points)
+
+    # Get faces
+    faces = mesh.faces.reshape(-1, 4)[:, 1:4]
+
+    return node_coords, faces
+
+
 def load_stl_mesh(stl_path: Path) -> Tuple[np.ndarray, np.ndarray]:
     """
     Load STL directly as triangle mesh using PyVista (fast).
@@ -82,57 +201,30 @@ def load_stl_mesh(stl_path: Path) -> Tuple[np.ndarray, np.ndarray]:
     return node_coords, faces
 
 
-def mesh_stl(stl_path: Path, mesh_size: float = 2.0, use_gmsh: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+def mesh_stl(stl_path: Path, mesh_size: float = 3.0, clean: bool = True) -> Tuple[np.ndarray, np.ndarray, MeshQuality]:
     """
-    Mesh an STL file.
+    Mesh an STL file with quality metrics.
 
-    By default uses fast PyVista loader. Set use_gmsh=True for tetrahedral meshing.
+    Args:
+        stl_path: Path to STL file
+        mesh_size: Target element size (currently unused, for future Gmsh integration)
+        clean: If True, clean the mesh (merge duplicates, fix normals)
 
     Returns:
-        Tuple of (node_coords, elements)
+        Tuple of (node_coords, elements, quality)
     """
-    if not use_gmsh:
-        return load_stl_mesh(stl_path)
+    if clean:
+        try:
+            node_coords, elements = clean_mesh_pyvista(stl_path)
+            quality = calculate_mesh_quality(node_coords, elements)
+            return node_coords, elements, quality
+        except Exception as e:
+            print(f"   Warning: Mesh cleaning failed ({e}), using original mesh")
 
-    import gmsh
-
-    gmsh.initialize()
-    gmsh.option.setNumber("General.Terminal", 0)  # Suppress output
-
-    try:
-        # Merge STL
-        gmsh.merge(str(stl_path))
-
-        # Create surface mesh from STL
-        gmsh.model.mesh.createTopology()
-        gmsh.model.mesh.classifySurfaces(angle=40 * np.pi / 180)
-        gmsh.model.mesh.createGeometry()
-
-        # Set mesh size
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", mesh_size)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", mesh_size / 4)
-
-        # Generate 3D mesh
-        gmsh.model.mesh.generate(3)
-
-        # Get nodes
-        node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
-        node_coords = np.array(node_coords).reshape(-1, 3)
-
-        # Get elements (tetrahedra = type 4)
-        elem_types, elem_tags, elem_nodes = gmsh.model.mesh.getElements(dim=3)
-
-        if len(elem_nodes) > 0:
-            elements = np.array(elem_nodes[0]).reshape(-1, 4) - 1  # 0-indexed
-        else:
-            # Fallback: use surface triangles
-            elem_types, elem_tags, elem_nodes = gmsh.model.mesh.getElements(dim=2)
-            elements = np.array(elem_nodes[0]).reshape(-1, 3) - 1
-
-        return node_coords, elements
-
-    finally:
-        gmsh.finalize()
+    # Fallback to direct STL loading
+    node_coords, elements = load_stl_mesh(stl_path)
+    quality = calculate_mesh_quality(node_coords, elements)
+    return node_coords, elements, quality
 
 
 def find_hole_nodes(node_coords: np.ndarray, hole_centers: List[Tuple[float, float]],
@@ -312,7 +404,8 @@ def simple_fea_solver(
 
 def visualize_stress(result: FEAResult, stl_path: Path, title: str = "Von Mises Stress", use_web: bool = True,
                      fixed_hole_centers: list = None, load_hole_center: list = None,
-                     force_direction: list = None, force_magnitude: float = 100):
+                     force_direction: list = None, force_magnitude: float = 100,
+                     mesh_quality: 'MeshQuality' = None):
     """
     Visualize von Mises stress.
 
@@ -325,10 +418,11 @@ def visualize_stress(result: FEAResult, stl_path: Path, title: str = "Von Mises 
         load_hole_center: (x, y) tuple for load hole position
         force_direction: [dx, dy, dz] force direction vector
         force_magnitude: Force magnitude in N
+        mesh_quality: MeshQuality object with mesh statistics
     """
     if use_web:
         visualize_stress_web(result, stl_path, title, fixed_hole_centers, load_hole_center,
-                            force_direction, force_magnitude)
+                            force_direction, force_magnitude, mesh_quality)
     else:
         visualize_stress_pyvista(result, title)
 
@@ -350,7 +444,8 @@ def find_nearest_numpy(query_points: np.ndarray, reference_points: np.ndarray) -
 
 def visualize_stress_web(result: FEAResult, stl_path: Path, title: str = "Von Mises Stress",
                          fixed_hole_centers: list = None, load_hole_center: list = None,
-                         force_direction: list = None, force_magnitude: float = 100):
+                         force_direction: list = None, force_magnitude: float = 100,
+                         mesh_quality: 'MeshQuality' = None):
     """
     Visualize von Mises stress using web-based Three.js viewer.
     Same unified viewer as CAD models.
@@ -393,6 +488,11 @@ def visualize_stress_web(result: FEAResult, stl_path: Path, title: str = "Von Mi
 
     load_dir = [float(x) for x in force_direction] if force_direction else [0, 0, -1]
 
+    # Mesh quality info
+    mesh_elements = result.mesh_elements
+    mesh_aspect = mesh_quality.avg_aspect_ratio if mesh_quality else 1.0
+    mesh_qual_score = mesh_quality.quality_score if mesh_quality else 1.0
+
     # Open web viewer
     view_fea_web(
         stl_path,
@@ -404,7 +504,10 @@ def visualize_stress_web(result: FEAResult, stl_path: Path, title: str = "Von Mi
         fixed_positions,
         load_position,
         load_dir,
-        force_magnitude
+        force_magnitude,
+        mesh_elements,
+        mesh_aspect,
+        mesh_qual_score
     )
 
 
@@ -536,10 +639,17 @@ def run_analysis(
         model_path = stl_path
         print(f"   Converted to: {stl_path.name}")
 
-    # Mesh the geometry
-    print("   Meshing...")
-    node_coords, elements = mesh_stl(model_path, mesh_size)
-    print(f"   Mesh: {len(node_coords)} nodes, {len(elements)} elements")
+    # Mesh the geometry with cleaning
+    print("   Loading and cleaning mesh...")
+    node_coords, elements, quality = mesh_stl(model_path, mesh_size, clean=True)
+
+    print(f"   Mesh Statistics:")
+    print(f"      Nodes: {quality.n_nodes}")
+    print(f"      Elements: {quality.n_elements}")
+    print(f"      Aspect Ratio: {quality.avg_aspect_ratio:.2f} (range: {quality.min_aspect_ratio:.2f} - {quality.max_aspect_ratio:.2f})")
+    print(f"      Min Angle: {quality.min_angle:.1f}° (avg: {quality.avg_angle:.1f}°)")
+    print(f"      Max Angle: {quality.max_angle:.1f}°")
+    print(f"      Quality Score: {quality.quality_score:.2f} (0-1, higher is better)")
 
     # Find hole positions (for triangle bracket: calculated from geometry)
     # Triangle bracket hole centers (from the example)
@@ -630,7 +740,8 @@ def run_analysis(
                         fixed_hole_centers=fixed_hole_centers,
                         load_hole_center=load_hole_center,
                         force_direction=force_direction,
-                        force_magnitude=force_magnitude)
+                        force_magnitude=force_magnitude,
+                        mesh_quality=quality)
 
     return result
 

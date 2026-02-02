@@ -1,37 +1,26 @@
 #!/usr/bin/env python3
 """
-Example: Triangular Mounting Bracket
+Simple Triangle Bracket for FEA Testing
 
-A triangular bracket with:
-- Equilateral triangle shape
-- 3 bolt holes (one at each corner)
-- Chamfered corners for safety/aesthetics
-- Filleted edges
+A triangular bracket with clean geometry (no chamfers/fillets)
+for better mesh quality in FEA analysis.
 
 Parameters:
     SIDE_LENGTH: Triangle side length (mm)
     THICKNESS: Plate thickness (mm)
     HOLE_DIAMETER: Bolt hole diameter (mm)
     HOLE_INSET: Distance from corner to hole center (mm)
-    CHAMFER_SIZE: Corner chamfer size (mm)
-    EDGE_FILLET: Top/bottom edge fillet (mm)
-
-Usage:
-    python examples/triangle_bracket.py
-    ./view output/triangle_bracket.stl
 """
 
 import cadquery as cq
 import math
 from pathlib import Path
 
-# Parameters - adjust these for your needs
+# Parameters
 SIDE_LENGTH = 80       # Length of triangle side (mm)
 THICKNESS = 6          # Plate thickness (mm)
-HOLE_DIAMETER = 6.5    # M6 clearance hole (use 5.3 for M5, 4.3 for M4)
+HOLE_DIAMETER = 6.5    # M6 clearance hole
 HOLE_INSET = 15        # Distance from corner to hole center
-CHAMFER_SIZE = 10      # Chamfer on triangle points
-EDGE_FILLET = 1.5      # Fillet on top/bottom edges
 
 
 def inset_point(vertex: tuple, inset: float, center: tuple = (0, 0)) -> tuple:
@@ -43,22 +32,16 @@ def inset_point(vertex: tuple, inset: float, center: tuple = (0, 0)) -> tuple:
     return (vx + dx / length * inset, vy + dy / length * inset)
 
 
-def create_triangle_bracket(
+def create_simple_bracket(
     side_length: float = SIDE_LENGTH,
     thickness: float = THICKNESS,
     hole_diameter: float = HOLE_DIAMETER,
-    hole_inset: float = HOLE_INSET,
-    chamfer_size: float = CHAMFER_SIZE,
-    edge_fillet: float = EDGE_FILLET
+    hole_inset: float = HOLE_INSET
 ) -> cq.Workplane:
     """
-    Create a triangular bracket with chamfered corners and bolt holes.
-
-    Returns:
-        CadQuery Workplane with the bracket geometry
+    Create a simple triangular bracket without chamfers or fillets.
     """
     # Calculate equilateral triangle vertices
-    # Height of equilateral triangle: h = (sqrt(3)/2) * side
     height = (math.sqrt(3) / 2) * side_length
 
     # Vertices centered at origin: top, bottom-left, bottom-right
@@ -71,7 +54,7 @@ def create_triangle_bracket(
     hole_bl = inset_point(bottom_left, hole_inset)
     hole_br = inset_point(bottom_right, hole_inset)
 
-    # Build the bracket
+    # Build the bracket (simple, no chamfers/fillets)
     result = (
         cq.Workplane("XY")
         # Create triangle profile
@@ -80,12 +63,6 @@ def create_triangle_bracket(
         .lineTo(*bottom_left)
         .close()
         .extrude(thickness)
-        # Chamfer the vertical edges (triangle corners)
-        .edges("|Z")
-        .chamfer(chamfer_size)
-        # Fillet top and bottom edges
-        .edges(">Z or <Z")
-        .fillet(edge_fillet)
         # Add bolt holes at each corner
         .faces(">Z")
         .workplane()
@@ -97,7 +74,7 @@ def create_triangle_bracket(
 
 
 # Create the bracket
-result = create_triangle_bracket()
+result = create_simple_bracket()
 
 # Export if run directly
 if __name__ == "__main__":
@@ -105,26 +82,23 @@ if __name__ == "__main__":
     output_dir.mkdir(exist_ok=True)
 
     # Export files
-    step_path = output_dir / "triangle_bracket.step"
-    stl_path = output_dir / "triangle_bracket.stl"
+    step_path = output_dir / "simple_bracket.step"
+    stl_path = output_dir / "simple_bracket.stl"
 
     cq.exporters.export(result, str(step_path))
-    # Export STL with finer tessellation for better mesh quality
-    # tolerance: max deviation from true surface (smaller = more triangles)
-    # angularTolerance: max angle between adjacent triangles (smaller = smoother curves)
+    # Export STL with fine tessellation
     cq.exporters.export(result, str(stl_path), exportType="STL",
-                        tolerance=0.1, angularTolerance=0.1)
+                        tolerance=0.05, angularTolerance=0.05)
 
     # Print info
     bb = result.val().BoundingBox()
-    print(f"✅ Triangle Bracket Created!")
+    print(f"Simple Triangle Bracket Created!")
     print(f"   Side length: {SIDE_LENGTH} mm")
     print(f"   Thickness: {THICKNESS} mm")
     print(f"   Holes: 3x {HOLE_DIAMETER}mm diameter")
-    print(f"   Corner chamfer: {CHAMFER_SIZE} mm")
     print(f"   Size: {bb.xmax - bb.xmin:.1f} x {bb.ymax - bb.ymin:.1f} x {bb.zmax - bb.zmin:.1f} mm")
-    print(f"   Volume: {result.val().Volume():.1f} mm³")
+    print(f"   Volume: {result.val().Volume():.1f} mm^3")
     print(f"\n   Files:")
     print(f"   - {step_path}")
     print(f"   - {stl_path}")
-    print(f"\n   View with: ./view output/triangle_bracket.stl")
+    print(f"\n   View with: ./view {stl_path}")
