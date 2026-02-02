@@ -1,0 +1,51 @@
+# FEA/CFD Analysis Environment
+# Provides: CalculiX, Gmsh, Python bindings
+
+FROM ubuntu:22.04
+
+LABEL maintainer="Engineering Hub"
+LABEL description="FEA/CFD analysis environment for AI-agentic engineering"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies and analysis tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    calculix-ccx \
+    calculix-cgx \
+    gmsh \
+    python3 \
+    python3-pip \
+    python3-venv \
+    libglu1-mesa \
+    libxrender1 \
+    libxcursor1 \
+    libxft2 \
+    libxinerama1 \
+    git \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -m -s /bin/bash engineer
+WORKDIR /home/engineer/workspace
+
+# Install Python packages for analysis
+RUN pip3 install --no-cache-dir \
+    numpy \
+    scipy \
+    meshio \
+    pygmsh \
+    pyvista \
+    pandas \
+    matplotlib
+
+# Verify installations
+RUN ccx -v || true
+RUN gmsh --version
+
+# Copy workspace
+COPY --chown=engineer:engineer . .
+
+USER engineer
+
+CMD ["bash"]

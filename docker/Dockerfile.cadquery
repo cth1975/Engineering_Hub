@@ -1,0 +1,51 @@
+# CadQuery Development Environment
+# Provides: CadQuery, Build123d, export capabilities (STEP, STL, DXF, SVG)
+
+FROM python:3.11-slim
+
+LABEL maintainer="Engineering Hub"
+LABEL description="CadQuery CAD environment for AI-agentic engineering"
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1-mesa-glx \
+    libglu1-mesa \
+    libxrender1 \
+    libxcursor1 \
+    libxft2 \
+    libxinerama1 \
+    libxi6 \
+    libsm6 \
+    libice6 \
+    libxt6 \
+    libx11-6 \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -m -s /bin/bash engineer
+WORKDIR /home/engineer/workspace
+
+# Install Python packages
+RUN pip install --no-cache-dir \
+    cadquery-ocp \
+    cadquery \
+    build123d \
+    numpy \
+    scipy \
+    svgwrite \
+    ezdxf
+
+# For headless rendering (optional, for preview generation)
+RUN pip install --no-cache-dir \
+    vtk \
+    pillow
+
+# Copy workspace
+COPY --chown=engineer:engineer . .
+
+# Switch to non-root user
+USER engineer
+
+# Default command: Python REPL with CadQuery
+CMD ["python", "-c", "import cadquery as cq; print('CadQuery ready. Version:', cq.__version__)"]

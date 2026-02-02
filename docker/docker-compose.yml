@@ -1,0 +1,87 @@
+# Engineering Hub - Docker Compose Stack
+# Full development environment for AI-agentic engineering
+
+version: '3.8'
+
+services:
+  # CadQuery CAD environment
+  cadquery:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cadquery
+    container_name: enghub-cadquery
+    volumes:
+      - ../src:/home/engineer/workspace/src:rw
+      - ../models:/home/engineer/workspace/models:rw
+      - ../output:/home/engineer/workspace/output:rw
+    environment:
+      - PYTHONUNBUFFERED=1
+    stdin_open: true
+    tty: true
+    networks:
+      - enghub
+
+  # FEA/CFD analysis environment
+  analysis:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.analysis
+    container_name: enghub-analysis
+    volumes:
+      - ../src:/home/engineer/workspace/src:rw
+      - ../models:/home/engineer/workspace/models:rw
+      - ../output:/home/engineer/workspace/output:rw
+    environment:
+      - PYTHONUNBUFFERED=1
+    stdin_open: true
+    tty: true
+    networks:
+      - enghub
+
+  # CAM / manufacturing output environment
+  cam:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cam
+    container_name: enghub-cam
+    volumes:
+      - ../src:/home/engineer/workspace/src:rw
+      - ../models:/home/engineer/workspace/models:rw
+      - ../output:/home/engineer/workspace/output:rw
+    environment:
+      - PYTHONUNBUFFERED=1
+    stdin_open: true
+    tty: true
+    networks:
+      - enghub
+
+  # API layer (FastAPI) - orchestrates all services
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: enghub-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../src:/home/engineer/workspace/src:rw
+      - ../models:/home/engineer/workspace/models:rw
+      - ../output:/home/engineer/workspace/output:rw
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CADQUERY_SERVICE=cadquery
+      - ANALYSIS_SERVICE=analysis
+      - CAM_SERVICE=cam
+    depends_on:
+      - cadquery
+      - analysis
+      - cam
+    networks:
+      - enghub
+
+networks:
+  enghub:
+    driver: bridge
+
+volumes:
+  output:

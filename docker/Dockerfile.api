@@ -1,0 +1,36 @@
+# API Layer - FastAPI orchestration service
+# Coordinates CAD, Analysis, and CAM services
+
+FROM python:3.11-slim
+
+LABEL maintainer="Engineering Hub"
+LABEL description="API orchestration layer for AI-agentic engineering"
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -m -s /bin/bash engineer
+WORKDIR /home/engineer/workspace
+
+# Install Python packages
+RUN pip install --no-cache-dir \
+    fastapi \
+    uvicorn[standard] \
+    pydantic \
+    httpx \
+    python-multipart \
+    aiofiles
+
+# Copy workspace
+COPY --chown=engineer:engineer . .
+
+USER engineer
+
+# Expose API port
+EXPOSE 8000
+
+# Start FastAPI server
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

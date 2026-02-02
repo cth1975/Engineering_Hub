@@ -1,0 +1,35 @@
+# Engineering Hub - Python Dependencies
+
+# CAD (CadQuery ecosystem)
+cadquery-ocp>=7.7.0
+cadquery>=2.4.0
+build123d>=0.5.0
+
+# Export utilities
+ezdxf>=1.1.0
+svgwrite>=1.4.0
+
+# API layer
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+httpx>=0.26.0
+python-multipart>=0.0.6
+aiofiles>=23.2.0
+
+# Analysis support
+numpy>=1.26.0
+scipy>=1.12.0
+meshio>=5.3.0
+pygmsh>=7.1.0
+
+# Visualization (optional)
+# pyvista>=0.43.0
+# vtk>=9.3.0
+# pillow>=10.2.0
+
+# Development
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+black>=24.1.0
+ruff>=0.1.0
