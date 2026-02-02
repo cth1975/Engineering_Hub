@@ -156,10 +156,11 @@ cq.exporters.export(bracket, "nema17_bracket.step")
 
 ### Phase 1: Foundation (Current)
 - [x] Project planning and architecture
-- [ ] Docker development environment
-- [ ] CadQuery + cq-editor setup
-- [ ] Basic CLI for text → CAD generation
-- [ ] Export to STL/STEP/DXF
+- [x] Docker development environment
+- [x] CadQuery wrapper with CLI
+- [x] FastAPI orchestration layer
+- [x] Export to STL/STEP/DXF
+- [ ] Test Docker build and verify stack
 
 ### Phase 2: CAD Agent
 - [ ] Natural language → CadQuery code generation
