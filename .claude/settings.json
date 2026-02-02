@@ -1,0 +1,16 @@
+{
+  "project": {
+    "name": "Engineering Hub",
+    "description": "AI-agentic engineering environment for CAD → Analysis → Manufacturing"
+  },
+  "skills": {
+    "local": true,
+    "path": ".claude/skills"
+  },
+  "preferences": {
+    "output_directory": "output",
+    "default_cad_formats": ["STEP", "STL"],
+    "default_mesh_size": 2.0,
+    "default_print_layer_height": 0.2
+  }
+}

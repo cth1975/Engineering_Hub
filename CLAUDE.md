@@ -141,9 +141,48 @@ Result: Files + metadata (volume, bounding box)
 
 ---
 
+---
+
+## Local Skills (AI-Native Workflows)
+
+This project includes local Claude Code skills in `.claude/skills/`. Anyone cloning this repo gets these capabilities automatically.
+
+### Available Skills
+
+| Skill | Command | Purpose |
+|-------|---------|---------|
+| **CAD** | `/cad` | Generate 3D models from natural language |
+| **Analysis** | `/analysis` | Run FEA stress/thermal simulations |
+| **Manufacturing** | `/manufacturing` | Create G-code, DXF for fabrication |
+| **EngineeringHub** | `/engineeringhub` | Full pipeline with approval gates |
+
+### Quick Examples
+
+```bash
+# Generate a part
+/cad Create a NEMA 17 motor mount for 2020 extrusion
+
+# Run analysis
+/analysis Check stress with 50N load on bracket.step
+
+# Prepare for 3D printing
+/manufacturing Slice for PLA, 0.2mm layers
+
+# Full pipeline
+/engineeringhub I need a phone stand, 3D printable, holds 300g
+```
+
+### Skill Documentation
+
+- Full guide: `.claude/docs/SKILLS_GUIDE.md`
+- Individual skills: `.claude/skills/*/SKILL.md`
+
+---
+
 ## Remember
 
 - **Always update PROGRESS.md** when work is complete
 - **Read PROGRESS.md first** when starting a new session
+- **Use local skills** for CAD/Analysis/Manufacturing tasks
 - **Commit frequently** with descriptive messages
 - **Test Docker builds** before marking infrastructure complete

@@ -30,6 +30,8 @@ This is an AI-agentic engineering environment for the complete product lifecycle
 | FastAPI layer | ✅ Complete | `src/api/main.py` |
 | Export support | ✅ Complete | STEP, STL, DXF, SVG, AMF |
 | Example model | ✅ Complete | `examples/simple_bracket.py` |
+| Local Claude skills | ✅ Complete | `.claude/skills/` - CAD, Analysis, Manufacturing, EngineeringHub |
+| Progress tracking | ✅ Complete | PROGRESS.md + CLAUDE.md instructions |
 
 ### What's Next
 
@@ -92,6 +94,8 @@ This is an AI-agentic engineering environment for the complete product lifecycle
 | `src/tools/cadquery_wrapper.py` | Core CAD generation tool |
 | `src/api/main.py` | REST API endpoints |
 | `requirements.txt` | Python dependencies |
+| `.claude/skills/` | Local AI skills for CAD/Analysis/Manufacturing |
+| `.claude/docs/SKILLS_GUIDE.md` | How to use the local skills |
 
 ---
 
@@ -104,10 +108,22 @@ This is an AI-agentic engineering environment for the complete product lifecycle
 - Added example parametric model (L-bracket)
 - All committed to GitHub: https://github.com/cth1975/Engineering_Hub
 
+### 2026-02-01 - Local Skills Added
+- Created `.claude/skills/` directory structure
+- Added 4 project-specific skills:
+  - **CAD**: Natural language → CadQuery generation
+  - **Analysis**: FEA/CFD with CalculiX/OpenFOAM
+  - **Manufacturing**: G-code/DXF output
+  - **EngineeringHub**: Full pipeline orchestration
+- Added skills guide: `.claude/docs/SKILLS_GUIDE.md`
+- Updated CLAUDE.md with skill usage instructions
+- Anyone cloning repo now gets AI-native workflows
+
 **Next session should:**
 1. Test Docker build: `cd docker && docker-compose build`
 2. Verify CadQuery generates STL/STEP correctly
-3. Begin Phase 2 CAD Agent work
+3. Test skills with simple examples
+4. Begin Phase 2 CAD Agent work
 
 ---
 
