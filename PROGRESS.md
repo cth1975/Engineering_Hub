@@ -49,8 +49,14 @@ This is an AI-agentic engineering environment for the complete product lifecycle
 
 | Blocker | Impact | Resolution |
 |---------|--------|------------|
-| Docker not installed | Can't run analysis/CAM containers | Install Docker Desktop |
-| CadQuery not installed | Can't execute CAD code | `pip install cadquery-ocp cadquery` |
+| Docker CLI plugins | Needs sudo | Run: `sudo mkdir -p /usr/local/cli-plugins && brew install --cask docker` |
+
+### Recently Resolved
+
+| Item | Resolution |
+|------|------------|
+| ✅ CadQuery | Installed v2.6.1 - working |
+| ✅ Anthropic SDK | Installed - ready for LLM calls |
 
 ---
 
