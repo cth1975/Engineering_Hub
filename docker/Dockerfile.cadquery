@@ -1,5 +1,12 @@
 # CadQuery Development Environment
 # Provides: CadQuery, Build123d, export capabilities (STEP, STL, DXF, SVG)
+#
+# NOTE: CadQuery has complex dependencies. For full functionality, consider:
+# 1. Using conda: conda install -c conda-forge cadquery
+# 2. Running natively on macOS/Linux (recommended for now)
+# 3. Using the official CadQuery Docker image as base
+#
+# This Dockerfile provides a minimal working environment.
 
 FROM python:3.11-slim
 
@@ -8,7 +15,7 @@ LABEL description="CadQuery CAD environment for AI-agentic engineering"
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-glx \
+    libgl1 \
     libglu1-mesa \
     libxrender1 \
     libxcursor1 \
@@ -20,6 +27,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxt6 \
     libx11-6 \
     git \
+    cmake \
+    build-essential \
+    swig \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -27,19 +37,12 @@ RUN useradd -m -s /bin/bash engineer
 WORKDIR /home/engineer/workspace
 
 # Install Python packages
-RUN pip install --no-cache-dir \
-    cadquery-ocp \
-    cadquery \
-    build123d \
-    numpy \
-    scipy \
-    svgwrite \
-    ezdxf
-
-# For headless rendering (optional, for preview generation)
-RUN pip install --no-cache-dir \
-    vtk \
-    pillow
+# CadQuery has undeclared deps - numpy<2 required for nptyping compatibility
+RUN pip install --no-cache-dir "numpy<2" scipy
+RUN pip install --no-cache-dir multimethod typish nptyping casadi path
+RUN pip install --no-cache-dir nlopt
+RUN pip install --no-cache-dir cadquery-ocp cadquery
+RUN pip install --no-cache-dir svgwrite ezdxf
 
 # Copy workspace
 COPY --chown=engineer:engineer . .
